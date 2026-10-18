@@ -1,3 +1,33 @@
+server:
+  port: ${PORT:8084}
+
 spring:
   application:
-    name: digitalfix-ms-admin-queues
+    name: ms-admin-queues
+
+  # Configuración de Conexión a RabbitMQ
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin123}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        max-attempts: 3
+
+# Monitoreo con Spring Boot Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  health:
+    rabbitmq:
+      enabled: true
