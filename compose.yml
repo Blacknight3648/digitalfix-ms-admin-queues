@@ -1,0 +1,51 @@
+version: '3.8'
+
+networks:
+  digitalfix-net:
+    driver: bridge
+
+services:
+
+  # -------------------------------------------------------------------
+  # Broker de Mensajería: RabbitMQ con Management Plugin
+  # -------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: digitalfix-rabbitmq
+    ports:
+      - "5672:5672"   # Puerto AMQP
+      - "15672:15672" # Consola Web Management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin123}
+    networks:
+      - digitalfix-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------------
+  # Microservicio Gestor de Colas AMQP (ms-admin-queues)
+  # -------------------------------------------------------------------
+  ms-admin-queues:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ms-admin-queues
+    ports:
+      - "${PORT:-8084}:8084"
+    environment:
+      - PORT=${PORT:-8084}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-admin}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-admin123}
+      - RABBITMQ_VIRTUAL_HOST=${RABBITMQ_VIRTUAL_HOST:-/}
+    networks:
+      - digitalfix-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
