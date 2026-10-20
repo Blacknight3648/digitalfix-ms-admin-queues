@@ -3,6 +3,7 @@ package df.digitalfix_ms_admin_queues.controller;
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
+@Tag(name = "Bindings", description = "Vincular y desvincular colas de exchanges mediante una routing key")
 @RequestMapping("/api/v1/bindings")
 @RequiredArgsConstructor
 public class BindingAdminController {

@@ -3,6 +3,7 @@ package df.digitalfix_ms_admin_queues.controller;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
+@Tag(name = "Exchanges", description = "Crear y eliminar exchanges direct, topic, fanout o headers")
 @RequestMapping("/api/v1/exchanges")
 @RequiredArgsConstructor
 public class ExchangeAdminController {

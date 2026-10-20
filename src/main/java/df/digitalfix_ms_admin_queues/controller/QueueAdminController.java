@@ -3,6 +3,7 @@ package df.digitalfix_ms_admin_queues.controller;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Properties;
 
 @RestController
+@Tag(name = "Colas", description = "Crear, consultar, purgar y eliminar colas (con DLX y TTL opcionales)")
 @RequestMapping("/api/v1/queues")
 @RequiredArgsConstructor
 public class QueueAdminController {

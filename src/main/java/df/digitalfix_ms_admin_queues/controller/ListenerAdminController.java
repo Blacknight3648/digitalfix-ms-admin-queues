@@ -2,6 +2,7 @@ package df.digitalfix_ms_admin_queues.controller;
 
 import df.digitalfix_ms_admin_queues.dto.ListenerContainerDTO;
 import df.digitalfix_ms_admin_queues.service.ListenerAdminService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@Tag(name = "Listeners", description = "Estado y control (start, stop, pause, resume) de los consumidores de ms-notify")
 @RequestMapping("/api/v1/listeners")
 @RequiredArgsConstructor
 public class ListenerAdminController {

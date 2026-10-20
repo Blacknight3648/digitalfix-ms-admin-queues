@@ -18,6 +18,24 @@ spring:
         initial-interval: 1000ms
         max-attempts: 3
 
+app:
+  admin:
+    # Recursos del sistema (los declara ms-notify): no se pueden borrar ni desvincular por la API.
+    # Nombres exactos o prefijos terminados en '*'.
+    protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
+  listeners:
+    # Los @RabbitListener viven en ms-notify: el control de listeners se delega a su API interna.
+    notify-url: ${MS_NOTIFY_URL:http://localhost:8083}
+
+# Documentación OpenAPI / Swagger UI: http://localhost:8084/swagger-ui.html
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
 # Monitoreo con Spring Boot Actuator
 management:
   endpoints:

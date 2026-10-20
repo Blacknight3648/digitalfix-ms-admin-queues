@@ -1,112 +1,95 @@
 package df.digitalfix_ms_admin_queues.service.impl;
 
 import df.digitalfix_ms_admin_queues.dto.ListenerContainerDTO;
+import df.digitalfix_ms_admin_queues.exception.AdminQueueException;
 import df.digitalfix_ms_admin_queues.exception.ResourceNotFoundException;
 import df.digitalfix_ms_admin_queues.service.ListenerAdminService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer;
-import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
-import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
+/**
+ * Control remoto de los listeners de RabbitMQ.
+ *
+ * <p>Los {@code @RabbitListener} viven en el microservicio que consume las colas (ms-notify), y el
+ * {@code RabbitListenerEndpointRegistry} solo ve los contenedores de su propio proceso. Por eso este
+ * administrador centralizado no los consulta localmente: delega por HTTP en
+ * {@code /api/v1/listeners} de ms-notify, por la red interna digitalfix-net.
+ */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ListenerAdminServiceImpl implements ListenerAdminService {
 
-    private final RabbitListenerEndpointRegistry registry;
-    private final Set<String> pausedListeners = ConcurrentHashMap.newKeySet();
+    private static final String RUTA = "/api/v1/listeners";
+
+    private final RestClient notify;
+
+    public ListenerAdminServiceImpl(@Value("${app.listeners.notify-url}") String notifyUrl) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(10000);
+        this.notify = RestClient.builder().baseUrl(notifyUrl).requestFactory(factory).build();
+    }
 
     @Override
     public List<ListenerContainerDTO> getAllListeners() {
-        log.info("Consultando lista de todos los Listener Containers registrados");
-        return registry.getListenerContainerIds().stream()
-                .map(id -> mapToDTO(id, registry.getListenerContainer(id)))
-                .collect(Collectors.toList());
+        log.info("Consultando los listeners registrados en ms-notify");
+        return llamar(() -> notify.get().uri(RUTA).retrieve()
+                .body(new ParameterizedTypeReference<List<ListenerContainerDTO>>() { }), null);
     }
 
     @Override
     public ListenerContainerDTO getListenerById(String listenerId) {
         log.info("Consultando estado del listener: {}", listenerId);
-        MessageListenerContainer container = findContainerOrThrow(listenerId);
-        return mapToDTO(listenerId, container);
+        return llamar(() -> notify.get().uri(RUTA + "/{id}", listenerId).retrieve()
+                .body(ListenerContainerDTO.class), listenerId);
     }
 
     @Override
     public void startListener(String listenerId) {
-        log.info("Iniciando el listener container: {}", listenerId);
-        MessageListenerContainer container = findContainerOrThrow(listenerId);
-        pausedListeners.remove(listenerId);
-        if (!container.isRunning()) {
-            container.start();
-            log.info("Listener {} iniciado exitosamente", listenerId);
-        } else {
-            log.info("El listener {} ya se encontraba en ejecución", listenerId);
-        }
+        accion(listenerId, "start");
     }
 
     @Override
     public void stopListener(String listenerId) {
-        log.info("Deteniendo el listener container: {}", listenerId);
-        MessageListenerContainer container = findContainerOrThrow(listenerId);
-        pausedListeners.remove(listenerId);
-        if (container.isRunning()) {
-            container.stop();
-            log.info("Listener {} detenido exitosamente", listenerId);
-        } else {
-            log.info("El listener {} ya se encontraba detenido", listenerId);
-        }
+        accion(listenerId, "stop");
     }
 
     @Override
     public void pauseListener(String listenerId) {
-        log.info("Pausando el consumo del listener container: {}", listenerId);
-        MessageListenerContainer container = findContainerOrThrow(listenerId);
-        if (container.isRunning()) {
-            container.stop();
-        }
-        pausedListeners.add(listenerId);
-        log.info("Consumo de listener {} pausado exitosamente", listenerId);
+        accion(listenerId, "pause");
     }
 
     @Override
     public void resumeListener(String listenerId) {
-        log.info("Reanudando el consumo del listener container: {}", listenerId);
-        MessageListenerContainer container = findContainerOrThrow(listenerId);
-        pausedListeners.remove(listenerId);
-        if (!container.isRunning()) {
-            container.start();
-        }
-        log.info("Consumo de listener {} reanudado exitosamente", listenerId);
+        accion(listenerId, "resume");
     }
 
-    private MessageListenerContainer findContainerOrThrow(String listenerId) {
-        MessageListenerContainer container = registry.getListenerContainer(listenerId);
-        if (container == null) {
-            throw new ResourceNotFoundException("No se encontró ningún listener container con el ID: " + listenerId);
-        }
-        return container;
+    private void accion(String listenerId, String accion) {
+        log.info("Solicitando '{}' del listener {} a ms-notify", accion, listenerId);
+        llamar(() -> notify.post().uri(RUTA + "/{id}/{accion}", listenerId, accion).retrieve().toBodilessEntity(),
+                listenerId);
     }
 
-    private ListenerContainerDTO mapToDTO(String listenerId, MessageListenerContainer container) {
-        String queues = "";
-        if (container instanceof AbstractMessageListenerContainer abstractContainer) {
-            queues = Arrays.toString(abstractContainer.getQueueNames());
+    private <T> T llamar(java.util.function.Supplier<T> llamada, String listenerId) {
+        try {
+            return llamada.get();
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("No se encontró ningún listener container con el ID: " + listenerId);
+            }
+            throw new AdminQueueException("ms-notify rechazó la operación sobre el listener: " + e.getStatusText(), e);
+        } catch (RestClientException e) {
+            log.error("ms-notify no responde: {}", e.getMessage());
+            throw new AdminQueueException("No se pudo contactar al servicio dueño de los listeners (ms-notify)", e);
         }
-
-        return ListenerContainerDTO.builder()
-                .listenerId(listenerId)
-                .running(container != null && container.isRunning())
-                .paused(pausedListeners.contains(listenerId))
-                .autoStartup(container != null && container.isAutoStartup())
-                .queueNames(queues)
-                .build();
     }
 }
