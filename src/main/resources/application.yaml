@@ -7,8 +7,10 @@ spring:
 
   # Configuración de Conexión a RabbitMQ
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
+    # Nodos del clúster separados por coma: si se cae uno, el cliente reconecta al otro.
+    # Sin RABBITMQ_ADDRESSES se usa RABBITMQ_HOST:RABBITMQ_PORT (un solo nodo).
+    addresses: ${RABBITMQ_ADDRESSES:${RABBITMQ_HOST:localhost}:${RABBITMQ_PORT:5672}}
+    address-shuffle-mode: random  # reparte las conexiones entre los nodos
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:admin123}
     virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
