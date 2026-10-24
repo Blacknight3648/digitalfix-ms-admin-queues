@@ -11,6 +11,7 @@ import df.digitalfix_ms_admin_queues.exception.ResourceNotFoundException;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.beans.factory.annotation.Value;
@@ -119,6 +120,10 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     @Override
     public void createExchange(ExchangeRequestDTO dto) {
         log.info("Iniciando creación de exchange: {} de tipo {}", dto.getExchangeName(), dto.getType());
+        // Misma regla que las colas: crear lo que ya existe es un conflicto, no un 201 silencioso.
+        if (existeExchange(dto.getExchangeName())) {
+            throw new ResourceAlreadyExistsException("Ya existe un exchange llamado '" + dto.getExchangeName() + "'");
+        }
 
         Exchange exchange = buildExchange(dto);
 
@@ -135,6 +140,10 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     public boolean deleteExchange(String exchangeName) {
         log.info("Eliminando exchange: {}", exchangeName);
         verificarNoProtegido(exchangeName);
+        // RabbitMQ acepta borrar un exchange inexistente sin error: se valida antes para responder 404.
+        if (!existeExchange(exchangeName)) {
+            throw new ResourceNotFoundException("El exchange especificado no existe en el broker: " + exchangeName);
+        }
         try {
             return rabbitAdmin.deleteExchange(exchangeName);
         } catch (Exception e) {
@@ -189,6 +198,20 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
         } catch (Exception e) {
             log.error("Error al remover binding: {}", e.getMessage());
             throw traducir(e, "Fallo al eliminar el binding");
+        }
+    }
+
+    /**
+     * RabbitAdmin no tiene consulta de exchanges: se usa una declaración pasiva, que falla con
+     * 404 (NOT_FOUND) si el exchange no existe. Ese error cierra el canal, por eso va en su propia
+     * ejecución del RabbitTemplate.
+     */
+    private boolean existeExchange(String nombre) {
+        try {
+            rabbitAdmin.getRabbitTemplate().execute(canal -> canal.exchangeDeclarePassive(nombre));
+            return true;
+        } catch (AmqpException e) {
+            return false;
         }
     }
 

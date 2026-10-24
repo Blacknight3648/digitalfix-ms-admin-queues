@@ -5,8 +5,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -30,6 +32,32 @@ public class GlobalExceptionHandler {
         response.put("error", "Bad Request — Fallo de Validación DTO");
         response.put("errors", fieldErrors);
 
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    // Parámetros de ruta o de query inválidos (ej. DELETE /api/v1/queues/nombre%20con%20espacios)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleParameterValidation(HandlerMethodValidationException ex) {
+        Map<String, String> paramErrors = new HashMap<>();
+        ex.getParameterValidationResults().forEach(resultado -> paramErrors.put(
+                resultado.getMethodParameter().getParameterName(),
+                resultado.getResolvableErrors().get(0).getDefaultMessage()));
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Bad Request — Parámetro inválido");
+        response.put("errors", paramErrors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Bad Request — Parámetro faltante");
+        response.put("message", "Falta el parámetro obligatorio '" + ex.getParameterName() + "'");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 

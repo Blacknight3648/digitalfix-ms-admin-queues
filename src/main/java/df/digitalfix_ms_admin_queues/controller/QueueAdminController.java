@@ -3,6 +3,8 @@ package df.digitalfix_ms_admin_queues.controller;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 
 @RestController
 @Tag(name = "Colas", description = "Crear, consultar, purgar y eliminar colas (con DLX y TTL opcionales)")
@@ -38,7 +42,7 @@ public class QueueAdminController {
      * Consulta el estado y métricas de una cola existente.
      */
     @GetMapping("/{name}")
-    public ResponseEntity<Properties> getQueueProperties(@PathVariable("name") String queueName) {
+    public ResponseEntity<Properties> getQueueProperties(@PathVariable("name") @Pattern(regexp = NOMBRE, message = "El nombre " + NOMBRE_MENSAJE) @Size(max = LARGO_MAXIMO) String queueName) {
         Properties properties = rabbitAdminService.getQueueProperties(queueName);
         return ResponseEntity.ok(properties);
     }
@@ -49,7 +53,7 @@ public class QueueAdminController {
      */
     @DeleteMapping("/{name}")
     public ResponseEntity<Map<String, String>> deleteQueue(
-            @PathVariable("name") String queueName,
+            @PathVariable("name") @Pattern(regexp = NOMBRE, message = "El nombre " + NOMBRE_MENSAJE) @Size(max = LARGO_MAXIMO) String queueName,
             @RequestParam(value = "unusedOnly", defaultValue = "false") boolean unusedOnly,
             @RequestParam(value = "emptyOnly", defaultValue = "false") boolean emptyOnly) {
 
@@ -69,7 +73,7 @@ public class QueueAdminController {
      * Purga (vacía) todos los mensajes acumulados en una cola.
      */
     @PostMapping("/{name}/purge")
-    public ResponseEntity<Map<String, Object>> purgeQueue(@PathVariable("name") String queueName) {
+    public ResponseEntity<Map<String, Object>> purgeQueue(@PathVariable("name") @Pattern(regexp = NOMBRE, message = "El nombre " + NOMBRE_MENSAJE) @Size(max = LARGO_MAXIMO) String queueName) {
         int purgedCount = rabbitAdminService.purgeQueue(queueName);
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Cola purgada exitosamente.");

@@ -3,6 +3,8 @@ package df.digitalfix_ms_admin_queues.controller;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 
 @RestController
 @Tag(name = "Exchanges", description = "Crear y eliminar exchanges direct, topic, fanout o headers")
@@ -37,7 +41,7 @@ public class ExchangeAdminController {
      * Elimina un Exchange de RabbitMQ.
      */
     @DeleteMapping("/{name}")
-    public ResponseEntity<Map<String, String>> deleteExchange(@PathVariable("name") String exchangeName) {
+    public ResponseEntity<Map<String, String>> deleteExchange(@PathVariable("name") @Pattern(regexp = NOMBRE, message = "El nombre " + NOMBRE_MENSAJE) @Size(max = LARGO_MAXIMO) String exchangeName) {
         boolean deleted = rabbitAdminService.deleteExchange(exchangeName);
         Map<String, String> response = new HashMap<>();
         if (deleted) {
