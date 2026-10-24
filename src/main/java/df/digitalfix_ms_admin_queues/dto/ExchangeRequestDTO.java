@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -18,8 +20,8 @@ import lombok.NoArgsConstructor;
 public class ExchangeRequestDTO {
 
     @NotBlank(message = "El nombre del exchange (exchangeName) es obligatorio")
-    @Pattern(regexp = "^[a-zA-Z0-9._-]+$", message = "El nombre del exchange solo puede contener caracteres alfanuméricos, puntos, guiones y guiones bajos")
-    @Size(max = 255, message = "El nombre del exchange no puede superar 255 caracteres")
+    @Pattern(regexp = NOMBRE, message = "El nombre del exchange " + NOMBRE_MENSAJE)
+    @Size(max = LARGO_MAXIMO, message = "El nombre del exchange no puede superar 255 caracteres")
     private String exchangeName;
 
     @NotBlank(message = "El tipo de exchange es obligatorio (ej. direct, topic, fanout, headers)")
