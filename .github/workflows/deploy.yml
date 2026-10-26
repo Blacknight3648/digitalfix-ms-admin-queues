@@ -1,0 +1,68 @@
+name: Deploy MS Admin Queues to EC2
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ms-admin-queues-ec2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Test (Maven)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Grant execute permission for mvnw
+        run: chmod +x mvnw
+
+      - name: Build
+        run: ./mvnw -B -ntp package -DskipTests
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH (git pull + docker compose up -d --build)
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || secrets.EC2_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.EC2_APP_DIR || secrets.EC2_DEPLOY_PATH }}"
+
+            echo "==> Actualizando código a lo último de origin/deploy"
+            git fetch origin deploy
+            git reset --hard origin/deploy
+
+            echo "==> Reconstruyendo y levantando contenedor"
+            if [ -f docker-compose.prod.yaml ]; then
+              docker compose -f docker-compose.prod.yaml up -d --build
+            elif [ -f docker-compose.yml ] || [ -f docker-compose.yaml ]; then
+              docker compose up -d --build
+            elif [ -f ../digitalfix-infrastructure/docker-compose.yml ]; then
+              docker compose -f ../digitalfix-infrastructure/docker-compose.yml up -d --build ms-admin-queues
+            fi
+
+            echo "==> Limpiando imágenes viejas sin usar"
+            docker image prune -f
+
+            echo "==> Estado de los contenedores"
+            docker compose ps
