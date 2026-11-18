@@ -1,6 +1,7 @@
 package df.digitalfix_ms_admin_queues.controller;
 
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.exception.ResourceAlreadyExistsException;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import org.junit.jupiter.api.Test;
@@ -121,5 +122,37 @@ class AdminApiValidacionTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Falta el parámetro obligatorio 'routingKey'"));
         verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void inicializarTopologiaDevuelve201CuandoSeCreaY200CuandoYaExiste() throws Exception {
+        when(servicio.initializeTopology()).thenReturn(
+                QueueInitializeResponseDTO.builder()
+                        .created(true)
+                        .message("Topología de colas inicializada exitosamente.")
+                        .exchanges(java.util.List.of("cmd.direct", "cmd.topic", "cmd.dead.dlx"))
+                        .queues(java.util.List.of("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq"))
+                        .bindings(java.util.List.of())
+                        .build(),
+                QueueInitializeResponseDTO.builder()
+                        .created(false)
+                        .message("La topología de colas ya se encontraba inicializada.")
+                        .exchanges(java.util.List.of("cmd.direct", "cmd.topic", "cmd.dead.dlx"))
+                        .queues(java.util.List.of("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq"))
+                        .bindings(java.util.List.of())
+                        .build()
+        );
+
+        mockMvc.perform(post("/api/v1/queues/initialize"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.created").value(true))
+                .andExpect(jsonPath("$.exchanges.length()").value(3))
+                .andExpect(jsonPath("$.queues.length()").value(4));
+
+        mockMvc.perform(post("/api/v1/queues/initialize"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(false));
+
+        verify(servicio, times(2)).initializeTopology();
     }
 }

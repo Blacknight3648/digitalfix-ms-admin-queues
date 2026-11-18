@@ -2,6 +2,7 @@ package df.digitalfix_ms_admin_queues.service.impl;
 
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.exception.ProtectedResourceException;
 import df.digitalfix_ms_admin_queues.exception.ResourceAlreadyExistsException;
@@ -150,5 +151,30 @@ class RabbitAdminServiceImplTest {
         assertThatThrownBy(() -> servicio.removeBinding(new BindingRequestDTO("q.cmd.email", "cmd.direct", "email.send")))
                 .isInstanceOf(ProtectedResourceException.class);
         verify(rabbitAdmin, never()).removeBinding(any());
+    }
+
+    @Test
+    void inicializaTopologiaCuandoFaltanRecursos() {
+        exchangeExiste(false);
+        when(rabbitAdmin.getQueueProperties(anyString())).thenReturn(null);
+
+        QueueInitializeResponseDTO respuesta = servicio.initializeTopology();
+
+        verify(rabbitAdmin).initialize();
+        assertThat(respuesta.isCreated()).isTrue();
+        assertThat(respuesta.getExchanges()).containsExactly("cmd.direct", "cmd.topic", "cmd.dead.dlx");
+        assertThat(respuesta.getQueues()).containsExactly("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq");
+        assertThat(respuesta.getBindings()).hasSize(6);
+    }
+
+    @Test
+    void inicializaTopologiaDeFormaIdempotenteCuandoYaExiste() {
+        exchangeExiste(true);
+        when(rabbitAdmin.getQueueProperties(anyString())).thenReturn(new Properties());
+
+        QueueInitializeResponseDTO respuesta = servicio.initializeTopology();
+
+        verify(rabbitAdmin).initialize();
+        assertThat(respuesta.isCreated()).isFalse();
     }
 }

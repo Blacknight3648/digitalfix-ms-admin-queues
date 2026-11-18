@@ -1,7 +1,9 @@
 package df.digitalfix_ms_admin_queues.service.impl;
 
+import df.digitalfix_ms_admin_queues.config.RabbitTopologyConfig;
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.enums.ExchangeType;
 import df.digitalfix_ms_admin_queues.exception.AdminQueueException;
@@ -33,6 +35,56 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
     @Value("${app.admin.protected-resources:}")
     private List<String> protectedResources;
+
+    // ===================================================================
+    // INICIALIZACIÓN IDEMPOTENTE DE TOPOLOGÍA BASE
+    // ===================================================================
+
+    @Override
+    public QueueInitializeResponseDTO initializeTopology() {
+        log.info("Iniciando declaración idempotente de topología base en RabbitMQ");
+
+        List<String> exchanges = List.of(
+                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT,
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC,
+                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX
+        );
+        List<String> queues = List.of(
+                RabbitTopologyConfig.QUEUE_CMD_EMAIL,
+                RabbitTopologyConfig.QUEUE_CMD_DISPATCH,
+                RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ,
+                RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ
+        );
+        List<String> bindings = List.of(
+                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_SEND + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_SEND + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_TICKET + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_TICKET + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_DLQ + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_DLQ + "]"
+        );
+
+        boolean faltanRecursos = exchanges.stream().anyMatch(ex -> !existeExchange(ex))
+                || queues.stream().anyMatch(q -> rabbitAdmin.getQueueProperties(q) == null);
+
+        try {
+            rabbitAdmin.initialize();
+            String message = faltanRecursos
+                    ? "Topología de colas inicializada exitosamente."
+                    : "La topología de colas ya se encontraba inicializada.";
+            log.info(message);
+            return QueueInitializeResponseDTO.builder()
+                    .created(faltanRecursos)
+                    .message(message)
+                    .exchanges(exchanges)
+                    .queues(queues)
+                    .bindings(bindings)
+                    .build();
+        } catch (Exception e) {
+            log.error("Error al inicializar la topología de colas: {}", e.getMessage());
+            throw traducir(e, "Fallo al inicializar la topología de colas");
+        }
+    }
 
     // ===================================================================
     // GESTIÓN DE COLAS (QUEUES)

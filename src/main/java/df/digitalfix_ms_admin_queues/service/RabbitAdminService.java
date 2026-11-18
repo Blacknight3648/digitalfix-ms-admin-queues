@@ -2,11 +2,15 @@ package df.digitalfix_ms_admin_queues.service;
 
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 
 import java.util.Properties;
 
 public interface RabbitAdminService {
+
+    // Inicialización idempotente de topología base
+    QueueInitializeResponseDTO initializeTopology();
 
     // Gestión de Colas (Queues)
     void createQueue(QueueRequestDTO queueRequestDTO);

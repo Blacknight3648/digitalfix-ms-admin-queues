@@ -1,5 +1,6 @@
 package df.digitalfix_ms_admin_queues.controller;
 
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
 import jakarta.validation.Valid;
@@ -24,6 +25,17 @@ import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 public class QueueAdminController {
 
     private final RabbitAdminService rabbitAdminService;
+
+    /**
+     * POST /api/v1/queues/initialize
+     * Declara de forma idempotente la topología base (exchanges, colas, DLQs y bindings).
+     */
+    @PostMapping("/initialize")
+    public ResponseEntity<QueueInitializeResponseDTO> initializeQueues() {
+        QueueInitializeResponseDTO response = rabbitAdminService.initializeTopology();
+        HttpStatus status = response.isCreated() ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(response);
+    }
 
     /**
      * POST /api/v1/queues
