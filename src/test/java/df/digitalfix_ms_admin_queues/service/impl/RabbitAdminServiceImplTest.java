@@ -35,14 +35,16 @@ class RabbitAdminServiceImplTest {
 
     private RabbitAdmin rabbitAdmin;
     private RabbitTemplate rabbitTemplate;
+    private RabbitManagementClient managementClient;
     private RabbitAdminServiceImpl servicio;
 
     @BeforeEach
     void setUp() {
         rabbitAdmin = mock(RabbitAdmin.class);
         rabbitTemplate = mock(RabbitTemplate.class);
+        managementClient = mock(RabbitManagementClient.class);
         when(rabbitAdmin.getRabbitTemplate()).thenReturn(rabbitTemplate);
-        servicio = new RabbitAdminServiceImpl(rabbitAdmin);
+        servicio = new RabbitAdminServiceImpl(rabbitAdmin, managementClient);
         ReflectionTestUtils.setField(servicio, "protectedResources", List.of("q.cmd.*", "cmd.*"));
     }
 
@@ -163,8 +165,10 @@ class RabbitAdminServiceImplTest {
         verify(rabbitAdmin).initialize();
         assertThat(respuesta.isCreated()).isTrue();
         assertThat(respuesta.getExchanges()).containsExactly("cmd.direct", "cmd.topic", "cmd.dead.dlx");
-        assertThat(respuesta.getQueues()).containsExactly("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq");
-        assertThat(respuesta.getBindings()).hasSize(6);
+        assertThat(respuesta.getQueues()).containsExactly(
+                "q.cmd.email", "q.cmd.dispatch", "q.cmd.report",
+                "q.cmd.email.dlq", "q.cmd.dispatch.dlq", "q.cmd.report.dlq");
+        assertThat(respuesta.getBindings()).hasSize(9);
     }
 
     @Test
@@ -176,5 +180,19 @@ class RabbitAdminServiceImplTest {
 
         verify(rabbitAdmin).initialize();
         assertThat(respuesta.isCreated()).isFalse();
+    }
+
+    @Test
+    void delegaConsultaDeColasExchangesYBindingsAlManagementClient() {
+        when(managementClient.listQueues()).thenReturn(List.of(java.util.Map.of("name", "q.cmd.email")));
+        when(managementClient.listExchanges()).thenReturn(List.of(java.util.Map.of("name", "cmd.direct")));
+        when(managementClient.listBindings()).thenReturn(List.of(java.util.Map.of("routing_key", "email.send")));
+
+        assertThat(servicio.listQueues()).hasSize(1);
+        assertThat(servicio.listExchanges()).hasSize(1);
+        assertThat(servicio.listBindings()).hasSize(1);
+        verify(managementClient).listQueues();
+        verify(managementClient).listExchanges();
+        verify(managementClient).listBindings();
     }
 }

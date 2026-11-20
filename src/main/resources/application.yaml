@@ -25,9 +25,16 @@ app:
     # Recursos del sistema (los declara ms-notify): no se pueden borrar ni desvincular por la API.
     # Nombres exactos o prefijos terminados en '*'.
     protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
+    # URL de la API HTTP de RabbitMQ Management (puerto 15672) para listar colas, exchanges y bindings.
+    management-url: ${RABBITMQ_MANAGEMENT_URL:http://${RABBITMQ_HOST:localhost}:${RABBITMQ_MANAGEMENT_PORT:15672}}
   listeners:
     # Los @RabbitListener viven en ms-notify: el control de listeners se delega a su API interna.
     notify-url: ${MS_NOTIFY_URL:http://localhost:8083}
+
+digitalfix:
+  # ms-user: fuente del rol de negocio (USUARIOS/ROLES) para la autorización por rol.
+  ms-user:
+    url: ${MS_USER_URL:http://localhost:8082}
 
 # Documentación OpenAPI / Swagger UI: http://localhost:8084/swagger-ui.html
 springdoc:

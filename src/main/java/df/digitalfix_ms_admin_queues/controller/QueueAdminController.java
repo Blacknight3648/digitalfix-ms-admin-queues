@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -25,6 +26,15 @@ import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 public class QueueAdminController {
 
     private final RabbitAdminService rabbitAdminService;
+
+    /**
+     * GET /api/v1/queues
+     * Lista todas las colas registradas en el broker RabbitMQ.
+     */
+    @GetMapping
+    public ResponseEntity<List<Map<String, Object>>> listQueues() {
+        return ResponseEntity.ok(rabbitAdminService.listQueues());
+    }
 
     /**
      * POST /api/v1/queues/initialize

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
@@ -23,6 +24,15 @@ import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 public class BindingAdminController {
 
     private final RabbitAdminService rabbitAdminService;
+
+    /**
+     * GET /api/v1/bindings
+     * Lista todos los bindings registrados en el broker RabbitMQ.
+     */
+    @GetMapping
+    public ResponseEntity<List<Map<String, Object>>> listBindings() {
+        return ResponseEntity.ok(rabbitAdminService.listBindings());
+    }
 
     /**
      * POST /api/v1/bindings

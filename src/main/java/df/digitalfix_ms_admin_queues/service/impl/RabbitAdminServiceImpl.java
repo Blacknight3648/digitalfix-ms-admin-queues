@@ -30,6 +30,7 @@ import java.util.Properties;
 public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final RabbitAdmin rabbitAdmin;
+    private final RabbitManagementClient managementClient;
 
     // Colas y exchanges del sistema (los declara ms-notify): no se pueden borrar ni desvincular
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
@@ -52,16 +53,21 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
         List<String> queues = List.of(
                 RabbitTopologyConfig.QUEUE_CMD_EMAIL,
                 RabbitTopologyConfig.QUEUE_CMD_DISPATCH,
+                RabbitTopologyConfig.QUEUE_CMD_REPORT,
                 RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ,
-                RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ
+                RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ,
+                RabbitTopologyConfig.QUEUE_CMD_REPORT_DLQ
         );
         List<String> bindings = List.of(
                 RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_SEND + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_SEND + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_EMAIL + "]",
                 RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_TICKET + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_TICKET + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_DISPATCH + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT + " [" + RabbitTopologyConfig.ROUTING_KEY_REPORT_GEN + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_REPORT + "]",
                 RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_DLQ + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_DLQ + "]"
+                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_DLQ + "]",
+                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_REPORT_DLQ + "]"
         );
 
         boolean faltanRecursos = exchanges.stream().anyMatch(ex -> !existeExchange(ex))
@@ -84,6 +90,28 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
             log.error("Error al inicializar la topología de colas: {}", e.getMessage());
             throw traducir(e, "Fallo al inicializar la topología de colas");
         }
+    }
+
+    // ===================================================================
+    // CONSULTA DE INVENTARIO (RABBITMQ MANAGEMENT API)
+    // ===================================================================
+
+    @Override
+    public List<Map<String, Object>> listQueues() {
+        log.info("Listando todas las colas registradas en RabbitMQ");
+        return managementClient.listQueues();
+    }
+
+    @Override
+    public List<Map<String, Object>> listExchanges() {
+        log.info("Listando todos los exchanges registrados en RabbitMQ");
+        return managementClient.listExchanges();
+    }
+
+    @Override
+    public List<Map<String, Object>> listBindings() {
+        log.info("Listando todos los bindings registrados en RabbitMQ");
+        return managementClient.listBindings();
     }
 
     // ===================================================================
