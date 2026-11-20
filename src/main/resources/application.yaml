@@ -22,11 +22,60 @@ spring:
 
 app:
   admin:
-    # Recursos del sistema (los declara ms-notify): no se pueden borrar ni desvincular por la API.
+    # Recursos del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular por la API.
     # Nombres exactos o prefijos terminados en '*'.
     protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
     # URL de la API HTTP de RabbitMQ Management (puerto 15672) para listar colas, exchanges y bindings.
     management-url: ${RABBITMQ_MANAGEMENT_URL:http://${RABBITMQ_HOST:localhost}:${RABBITMQ_MANAGEMENT_PORT:15672}}
+  # Topología centralizada de RabbitMQ (declarada únicamente por ms-admin-queues)
+  topology:
+    exchanges:
+      - name: cmd.direct      # Exchange principal para envío directo de comandos (ms-workorders -> colas)
+        type: DIRECT
+        durable: true
+        auto-delete: false
+      - name: cmd.topic       # Exchange por tópicos para enrutamiento flexible de comandos
+        type: TOPIC
+        durable: true
+        auto-delete: false
+      - name: cmd.dead.dlx    # Dead Letter Exchange centralizado para mensajes fallidos (.dlq)
+        type: DIRECT
+        durable: true
+        auto-delete: false
+    queues:
+      # Cola de envío de correos electrónicos (consumida por ms-notify)
+      - name: q.cmd.email
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: email.send.dlq
+        dlq-name: q.cmd.email.dlq
+        bindings:
+          - exchange: cmd.direct
+            routing-key: email.send
+          - exchange: cmd.topic
+            routing-key: email.send
+      # Cola de despacho de tickets / órdenes de trabajo (publicada por ms-workorders, consumida por ms-notify)
+      - name: q.cmd.dispatch
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: dispatch.ticket.dlq
+        dlq-name: q.cmd.dispatch.dlq
+        bindings:
+          - exchange: cmd.direct
+            routing-key: dispatch.ticket
+          - exchange: cmd.topic
+            routing-key: dispatch.ticket
+      # Cola de generación de reportes (publicada por ms-workorders/reportes, consumida por ms-notify/reportes)
+      - name: q.cmd.report
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: report.generate.dlq
+        dlq-name: q.cmd.report.dlq
+        bindings:
+          - exchange: cmd.direct
+            routing-key: report.generate
+          - exchange: cmd.topic
+            routing-key: report.generate
   listeners:
     # Los @RabbitListener viven en ms-notify: el control de listeners se delega a su API interna.
     notify-url: ${MS_NOTIFY_URL:http://localhost:8083}

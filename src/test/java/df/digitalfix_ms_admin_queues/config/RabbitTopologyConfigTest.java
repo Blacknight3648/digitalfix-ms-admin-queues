@@ -1,10 +1,9 @@
 package df.digitalfix_ms_admin_queues.config;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.*;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,119 +11,83 @@ class RabbitTopologyConfigTest {
 
     private final RabbitTopologyConfig config = new RabbitTopologyConfig();
 
-    @Test
-    void declaraExchangesDurablesEsperados() {
-        DirectExchange direct = config.cmdDirectExchange();
-        TopicExchange topic = config.cmdTopicExchange();
-        DirectExchange dlx = config.cmdDeadDlxExchange();
+    static RabbitTopologyProperties sampleProperties() {
+        RabbitTopologyProperties props = new RabbitTopologyProperties();
 
-        assertThat(direct.getName()).isEqualTo("cmd.direct");
-        assertThat(direct.isDurable()).isTrue();
-        assertThat(direct.isAutoDelete()).isFalse();
+        props.setExchanges(List.of(
+                exchange("cmd.direct", "DIRECT"),
+                exchange("cmd.topic", "TOPIC"),
+                exchange("cmd.dead.dlx", "DIRECT")
+        ));
 
-        assertThat(topic.getName()).isEqualTo("cmd.topic");
-        assertThat(topic.isDurable()).isTrue();
-        assertThat(topic.isAutoDelete()).isFalse();
+        props.setQueues(List.of(
+                queue("q.cmd.email", "q.cmd.email.dlq", "email.send.dlq", "email.send"),
+                queue("q.cmd.dispatch", "q.cmd.dispatch.dlq", "dispatch.ticket.dlq", "dispatch.ticket"),
+                queue("q.cmd.report", "q.cmd.report.dlq", "report.generate.dlq", "report.generate")
+        ));
+        return props;
+    }
 
-        assertThat(dlx.getName()).isEqualTo("cmd.dead.dlx");
-        assertThat(dlx.isDurable()).isTrue();
-        assertThat(dlx.isAutoDelete()).isFalse();
+    private static RabbitTopologyProperties.ExchangeDefinition exchange(String name, String type) {
+        RabbitTopologyProperties.ExchangeDefinition def = new RabbitTopologyProperties.ExchangeDefinition();
+        def.setName(name);
+        def.setType(type);
+        def.setDurable(true);
+        def.setAutoDelete(false);
+        return def;
+    }
+
+    private static RabbitTopologyProperties.QueueDefinition queue(String name, String dlqName, String dlqRk, String rk) {
+        RabbitTopologyProperties.QueueDefinition q = new RabbitTopologyProperties.QueueDefinition();
+        q.setName(name);
+        q.setDurable(true);
+        q.setDeadLetterExchange("cmd.dead.dlx");
+        q.setDeadLetterRoutingKey(dlqRk);
+        q.setDlqName(dlqName);
+
+        RabbitTopologyProperties.BindingDefinition bDirect = new RabbitTopologyProperties.BindingDefinition();
+        bDirect.setExchange("cmd.direct");
+        bDirect.setRoutingKey(rk);
+
+        RabbitTopologyProperties.BindingDefinition bTopic = new RabbitTopologyProperties.BindingDefinition();
+        bTopic.setExchange("cmd.topic");
+        bTopic.setRoutingKey(rk);
+
+        q.setBindings(List.of(bDirect, bTopic));
+        return q;
     }
 
     @Test
-    void declaraColasConDlxYDlqsCorrespondientes() {
-        Queue emailQueue = config.cmdEmailQueue();
-        Queue dispatchQueue = config.cmdDispatchQueue();
-        Queue reportQueue = config.cmdReportQueue();
-        Queue emailDlq = config.cmdEmailDlq();
-        Queue dispatchDlq = config.cmdDispatchDlq();
-        Queue reportDlq = config.cmdReportDlq();
+    void declaraExchangesColasDlqsYBindingsDesdePropiedades() {
+        Declarables declarables = config.rabbitTopologyDeclarables(sampleProperties());
 
-        assertThat(emailQueue.getName()).isEqualTo("q.cmd.email");
-        assertThat(emailQueue.isDurable()).isTrue();
+        List<Exchange> exchanges = declarables.getDeclarablesByType(Exchange.class);
+        List<Queue> queues = declarables.getDeclarablesByType(Queue.class);
+        List<Binding> bindings = declarables.getDeclarablesByType(Binding.class);
+
+        assertThat(exchanges).extracting(Exchange::getName)
+                .containsExactly("cmd.direct", "cmd.topic", "cmd.dead.dlx");
+        assertThat(exchanges).allMatch(Exchange::isDurable);
+
+        assertThat(queues).extracting(Queue::getName)
+                .containsExactly(
+                        "q.cmd.email", "q.cmd.email.dlq",
+                        "q.cmd.dispatch", "q.cmd.dispatch.dlq",
+                        "q.cmd.report", "q.cmd.report.dlq"
+                );
+        assertThat(queues).allMatch(Queue::isDurable);
+
+        Queue emailQueue = queues.stream().filter(q -> q.getName().equals("q.cmd.email")).findFirst().orElseThrow();
         assertThat(emailQueue.getArguments())
                 .containsEntry("x-dead-letter-exchange", "cmd.dead.dlx")
                 .containsEntry("x-dead-letter-routing-key", "email.send.dlq");
 
-        assertThat(dispatchQueue.getName()).isEqualTo("q.cmd.dispatch");
-        assertThat(dispatchQueue.isDurable()).isTrue();
-        assertThat(dispatchQueue.getArguments())
-                .containsEntry("x-dead-letter-exchange", "cmd.dead.dlx")
-                .containsEntry("x-dead-letter-routing-key", "dispatch.ticket.dlq");
-
-        assertThat(reportQueue.getName()).isEqualTo("q.cmd.report");
-        assertThat(reportQueue.isDurable()).isTrue();
-        assertThat(reportQueue.getArguments())
-                .containsEntry("x-dead-letter-exchange", "cmd.dead.dlx")
-                .containsEntry("x-dead-letter-routing-key", "report.gen.dlq");
-
-        assertThat(emailDlq.getName()).isEqualTo("q.cmd.email.dlq");
-        assertThat(emailDlq.isDurable()).isTrue();
-
-        assertThat(dispatchDlq.getName()).isEqualTo("q.cmd.dispatch.dlq");
-        assertThat(dispatchDlq.isDurable()).isTrue();
-
-        assertThat(reportDlq.getName()).isEqualTo("q.cmd.report.dlq");
-        assertThat(reportDlq.isDurable()).isTrue();
-    }
-
-    @Test
-    void declaraBindingsConRoutingKeysEsperadas() {
-        DirectExchange direct = config.cmdDirectExchange();
-        TopicExchange topic = config.cmdTopicExchange();
-        DirectExchange dlx = config.cmdDeadDlxExchange();
-
-        Queue emailQueue = config.cmdEmailQueue();
-        Queue dispatchQueue = config.cmdDispatchQueue();
-        Queue reportQueue = config.cmdReportQueue();
-        Queue emailDlq = config.cmdEmailDlq();
-        Queue dispatchDlq = config.cmdDispatchDlq();
-        Queue reportDlq = config.cmdReportDlq();
-
-        Binding b1 = config.bindEmailToDirect(emailQueue, direct);
-        Binding b2 = config.bindEmailToTopic(emailQueue, topic);
-        Binding b3 = config.bindDispatchToDirect(dispatchQueue, direct);
-        Binding b4 = config.bindDispatchToTopic(dispatchQueue, topic);
-        Binding b5 = config.bindEmailDlqToDlx(emailDlq, dlx);
-        Binding b6 = config.bindDispatchDlqToDlx(dispatchDlq, dlx);
-        Binding b7 = config.bindReportToDirect(reportQueue, direct);
-        Binding b8 = config.bindReportToTopic(reportQueue, topic);
-        Binding b9 = config.bindReportDlqToDlx(reportDlq, dlx);
-
-        assertThat(b1.getExchange()).isEqualTo("cmd.direct");
-        assertThat(b1.getDestination()).isEqualTo("q.cmd.email");
-        assertThat(b1.getRoutingKey()).isEqualTo("email.send");
-
-        assertThat(b2.getExchange()).isEqualTo("cmd.topic");
-        assertThat(b2.getDestination()).isEqualTo("q.cmd.email");
-        assertThat(b2.getRoutingKey()).isEqualTo("email.*");
-
-        assertThat(b3.getExchange()).isEqualTo("cmd.direct");
-        assertThat(b3.getDestination()).isEqualTo("q.cmd.dispatch");
-        assertThat(b3.getRoutingKey()).isEqualTo("dispatch.ticket");
-
-        assertThat(b4.getExchange()).isEqualTo("cmd.topic");
-        assertThat(b4.getDestination()).isEqualTo("q.cmd.dispatch");
-        assertThat(b4.getRoutingKey()).isEqualTo("dispatch.#");
-
-        assertThat(b5.getExchange()).isEqualTo("cmd.dead.dlx");
-        assertThat(b5.getDestination()).isEqualTo("q.cmd.email.dlq");
-        assertThat(b5.getRoutingKey()).isEqualTo("email.send.dlq");
-
-        assertThat(b6.getExchange()).isEqualTo("cmd.dead.dlx");
-        assertThat(b6.getDestination()).isEqualTo("q.cmd.dispatch.dlq");
-        assertThat(b6.getRoutingKey()).isEqualTo("dispatch.ticket.dlq");
-
-        assertThat(b7.getExchange()).isEqualTo("cmd.direct");
-        assertThat(b7.getDestination()).isEqualTo("q.cmd.report");
-        assertThat(b7.getRoutingKey()).isEqualTo("report.gen");
-
-        assertThat(b8.getExchange()).isEqualTo("cmd.topic");
-        assertThat(b8.getDestination()).isEqualTo("q.cmd.report");
-        assertThat(b8.getRoutingKey()).isEqualTo("report.*");
-
-        assertThat(b9.getExchange()).isEqualTo("cmd.dead.dlx");
-        assertThat(b9.getDestination()).isEqualTo("q.cmd.report.dlq");
-        assertThat(b9.getRoutingKey()).isEqualTo("report.gen.dlq");
+        assertThat(bindings).hasSize(9);
+        assertThat(bindings).anyMatch(b -> b.getExchange().equals("cmd.direct")
+                && b.getDestination().equals("q.cmd.report")
+                && b.getRoutingKey().equals("report.generate"));
+        assertThat(bindings).anyMatch(b -> b.getExchange().equals("cmd.dead.dlx")
+                && b.getDestination().equals("q.cmd.report.dlq")
+                && b.getRoutingKey().equals("report.generate.dlq"));
     }
 }

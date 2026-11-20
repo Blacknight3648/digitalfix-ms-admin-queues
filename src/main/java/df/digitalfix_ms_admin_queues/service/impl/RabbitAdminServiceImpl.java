@@ -1,6 +1,6 @@
 package df.digitalfix_ms_admin_queues.service.impl;
 
-import df.digitalfix_ms_admin_queues.config.RabbitTopologyConfig;
+import df.digitalfix_ms_admin_queues.config.RabbitTopologyProperties;
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
@@ -31,8 +31,9 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final RabbitAdmin rabbitAdmin;
     private final RabbitManagementClient managementClient;
+    private final RabbitTopologyProperties topologyProperties;
 
-    // Colas y exchanges del sistema (los declara ms-notify): no se pueden borrar ni desvincular
+    // Colas y exchanges del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
     @Value("${app.admin.protected-resources:}")
     private List<String> protectedResources;
@@ -43,32 +44,28 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     @Override
     public QueueInitializeResponseDTO initializeTopology() {
-        log.info("Iniciando declaración idempotente de topología base en RabbitMQ");
+        log.info("Iniciando declaración idempotente de topología centralizada en RabbitMQ");
 
-        List<String> exchanges = List.of(
-                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT,
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC,
-                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX
-        );
-        List<String> queues = List.of(
-                RabbitTopologyConfig.QUEUE_CMD_EMAIL,
-                RabbitTopologyConfig.QUEUE_CMD_DISPATCH,
-                RabbitTopologyConfig.QUEUE_CMD_REPORT,
-                RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ,
-                RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ,
-                RabbitTopologyConfig.QUEUE_CMD_REPORT_DLQ
-        );
-        List<String> bindings = List.of(
-                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_SEND + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_EMAIL + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_TICKET + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_DISPATCH + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DIRECT + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT + " [" + RabbitTopologyConfig.ROUTING_KEY_REPORT_GEN + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_TOPIC + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT + " [" + RabbitTopologyConfig.ROUTING_KEY_TOPIC_REPORT + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_EMAIL_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_EMAIL_DLQ + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_DISPATCH_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_DISPATCH_DLQ + "]",
-                RabbitTopologyConfig.EXCHANGE_CMD_DEAD_DLX + " -> " + RabbitTopologyConfig.QUEUE_CMD_REPORT_DLQ + " [" + RabbitTopologyConfig.ROUTING_KEY_REPORT_DLQ + "]"
-        );
+        List<String> exchanges = topologyProperties.getExchanges().stream()
+                .map(RabbitTopologyProperties.ExchangeDefinition::getName)
+                .toList();
+
+        List<String> queues = new java.util.ArrayList<>();
+        List<String> bindings = new java.util.ArrayList<>();
+
+        for (RabbitTopologyProperties.QueueDefinition q : topologyProperties.getQueues()) {
+            queues.add(q.getName());
+            for (RabbitTopologyProperties.BindingDefinition b : q.getBindings()) {
+                bindings.add(b.getExchange() + " -> " + q.getName() + " [" + b.getRoutingKey() + "]");
+            }
+            if (q.getDlqName() != null && !q.getDlqName().isBlank()) {
+                queues.add(q.getDlqName());
+                if (q.getDeadLetterExchange() != null && !q.getDeadLetterExchange().isBlank()
+                        && q.getDeadLetterRoutingKey() != null && !q.getDeadLetterRoutingKey().isBlank()) {
+                    bindings.add(q.getDeadLetterExchange() + " -> " + q.getDlqName() + " [" + q.getDeadLetterRoutingKey() + "]");
+                }
+            }
+        }
 
         boolean faltanRecursos = exchanges.stream().anyMatch(ex -> !existeExchange(ex))
                 || queues.stream().anyMatch(q -> rabbitAdmin.getQueueProperties(q) == null);
@@ -301,7 +298,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
                 .filter(p -> !p.isEmpty())
                 .anyMatch(p -> p.endsWith("*") ? nombre.startsWith(p.substring(0, p.length() - 1)) : nombre.equals(p));
         if (protegido) {
-            throw new ProtectedResourceException("'" + nombre + "' es un recurso del sistema (lo usa ms-notify) y no se puede eliminar ni desvincular desde la API");
+            throw new ProtectedResourceException("'" + nombre + "' es un recurso del sistema administrado por ms-admin-queues y no se puede eliminar ni desvincular desde la API");
         }
     }
 
