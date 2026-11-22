@@ -1,0 +1,20 @@
+name: Notify Backend Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request deploy from digitalfix-infrastructure
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh api repos/SolgreyDuocUC/digitalfix-infrastructure/dispatches \
+            -f event_type=deploy-main \
+            -f 'client_payload[service]=ms-admin-queues'
