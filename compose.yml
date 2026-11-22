@@ -43,6 +43,8 @@ services:
       - RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-admin}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-admin123}
       - RABBITMQ_VIRTUAL_HOST=${RABBITMQ_VIRTUAL_HOST:-/}
+      # Destino de los flujos email, dispatch y report (ms-notify en la misma red digitalfix-net)
+      - MS_NOTIFY_URL=${MS_NOTIFY_URL:-http://ms-digitalfix-notify:8083}
     networks:
       - digitalfix-net
     depends_on:

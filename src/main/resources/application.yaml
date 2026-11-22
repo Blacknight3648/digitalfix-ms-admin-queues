@@ -14,20 +14,78 @@ spring:
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:admin123}
     virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    # Publicación confiable: el broker confirma cada evento (publisher confirm) y devuelve el que
+    # ninguna cola recibe (mandatory). PublicadorEventosServiceImpl espera ambos antes de responder.
+    publisher-confirm-type: correlated
+    publisher-returns: true
     template:
+      mandatory: true
       retry:
         enabled: true
         initial-interval: 1000ms
         max-attempts: 3
+    listener:
+      simple:
+        acknowledge-mode: manual  # ACK solo cuando el destino respondió 2xx
+        prefetch: 1               # 1 mensaje en vuelo por hilo
+        concurrency: 1            # hilos mínimos de consumo por cola
+        max-concurrency: 3        # hilos máximos de consumo por cola
+        # Los reintentos los maneja ManejadorFallosEntrega (app.rabbitmq.retry), no el contenedor.
+        retry:
+          enabled: false
 
 app:
   admin:
-    # Recursos del sistema (los declara ms-notify): no se pueden borrar ni desvincular por la API.
+    # Recursos del sistema (los declara TopologiaRabbitConfig): no se pueden borrar ni desvincular por la API.
     # Nombres exactos o prefijos terminados en '*'.
     protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
-  listeners:
-    # Los @RabbitListener viven en ms-notify: el control de listeners se delega a su API interna.
-    notify-url: ${MS_NOTIFY_URL:http://localhost:8083}
+
+  # -------------------------------------------------------------------
+  # Topología RabbitMQ (caso, sección 8): única fuente de nombres de colas, exchanges y routing keys
+  # de todo el sistema. La lee TopologiaRabbitProperties y se valida al arrancar. Por cada flujo se
+  # declaran su cola, su DLQ y sus bindings, se registra su listener (listener-<flujo>) y sus
+  # mensajes se entregan por HTTP en "destino". Los productores publican con
+  # POST /internal/v1/eventos/<flujo>.
+  # -------------------------------------------------------------------
+  rabbitmq:
+    exchanges:
+      direct: cmd.direct      # comandos por routing key exacta
+      topic: cmd.topic        # los mismos comandos por patrón (con subtipo: email.asignada)
+      dlx: cmd.dead.dlx       # Dead Letter Exchange (direct) hacia las DLQ
+    flujos:
+      email:                  # Email/push al cliente (creada, asignada, en camino, cerrada)
+        cola: q.cmd.email
+        dlq: q.cmd.email.dlq
+        routing-key: email.send
+        patron-topic: email.*
+        routing-key-dlq: email.dead
+        destino: ${MS_NOTIFY_URL:http://localhost:8083}/internal/v1/notificaciones/email
+      dispatch:               # Ticket de despacho / orden de terreno al técnico
+        cola: q.cmd.dispatch
+        dlq: q.cmd.dispatch.dlq
+        routing-key: dispatch.ticket
+        patron-topic: dispatch.#
+        routing-key-dlq: dispatch.dead
+        destino: ${MS_NOTIFY_URL:http://localhost:8083}/internal/v1/notificaciones/despacho
+      report:                 # Generación de PDF (informe técnico o certificado de trabajo)
+        cola: q.cmd.report
+        dlq: q.cmd.report.dlq
+        routing-key: report.gen
+        patron-topic: report.*
+        routing-key-dlq: report.dead
+        destino: ${MS_NOTIFY_URL:http://localhost:8083}/internal/v1/notificaciones/informe
+    # Tiempo que un mensaje fallido se conserva en su DLQ para revisarlo
+    dlq-ttl: 24h
+    # Errores transitorios (destino caído, 5xx, timeout): reintentos antes de derivar a la DLQ
+    retry:
+      max-attempts: 3
+    # Entrega HTTP al microservicio de destino (enviar un correo SMTP puede tardar varios segundos)
+    entrega:
+      connect-timeout: 3s
+      read-timeout: 20s
+    # Espera máxima de la confirmación del broker al publicar un evento
+    publicacion:
+      confirm-timeout: 5s
 
 # Documentación OpenAPI / Swagger UI: http://localhost:8084/swagger-ui.html
 springdoc:
