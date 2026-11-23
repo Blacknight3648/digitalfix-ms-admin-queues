@@ -66,7 +66,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
         response.put("status", HttpStatus.NOT_FOUND.value());
-        response.put("error", "Recurso AMQP No Encontrado");
+        response.put("error", "Recurso No Encontrado");
         response.put("message", ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
@@ -77,7 +77,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
         response.put("status", HttpStatus.CONFLICT.value());
-        response.put("error", "Conflicto de Infraestructura AMQP");
+        response.put("error", "Conflicto de Infraestructura de Mensajería");
         response.put("message", ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -87,11 +87,33 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleProtectedResource(ProtectedResourceException ex) {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.CONFLICT.value());
-        response.put("error", "Recurso AMQP Protegido");
+        response.put("status", HttpStatus.FORBIDDEN.value());
+        response.put("error", "Recurso Protegido");
         response.put("message", ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Bad Request — Parámetro de Infraestructura Inválido");
+        response.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(BrokerUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleBrokerUnavailable(BrokerUnavailableException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.put("error", "Broker No Disponible");
+        response.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
     // Body JSON mal formado o tipo de dato incorrecto (ej. "durable": "si")
@@ -112,7 +134,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
         response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        response.put("error", "Error de Operación en RabbitAdmin");
+        response.put("error", "Error de Operación de Mensajería");
         response.put("message", ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

@@ -53,9 +53,13 @@ public class RabbitTopologyConfig {
             }
 
             if (hasText(qDef.getDlqName())) {
-                Queue dlq = qDef.isDurable()
-                        ? QueueBuilder.durable(qDef.getDlqName()).build()
-                        : QueueBuilder.nonDurable(qDef.getDlqName()).build();
+                QueueBuilder dlqBuilder = qDef.isDurable()
+                        ? QueueBuilder.durable(qDef.getDlqName())
+                        : QueueBuilder.nonDurable(qDef.getDlqName());
+                if (qDef.getDlqMessageTtl() != null && qDef.getDlqMessageTtl() > 0) {
+                    dlqBuilder.withArgument("x-message-ttl", qDef.getDlqMessageTtl());
+                }
+                Queue dlq = dlqBuilder.build();
                 declarables.add(dlq);
 
                 if (hasText(qDef.getDeadLetterExchange()) && hasText(qDef.getDeadLetterRoutingKey())) {

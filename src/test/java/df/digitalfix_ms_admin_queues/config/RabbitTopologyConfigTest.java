@@ -44,6 +44,7 @@ class RabbitTopologyConfigTest {
         q.setDeadLetterExchange("cmd.dead.dlx");
         q.setDeadLetterRoutingKey(dlqRk);
         q.setDlqName(dlqName);
+        q.setDlqMessageTtl(86_400_000L);
 
         RabbitTopologyProperties.BindingDefinition bDirect = new RabbitTopologyProperties.BindingDefinition();
         bDirect.setExchange("cmd.direct");
@@ -81,6 +82,9 @@ class RabbitTopologyConfigTest {
         assertThat(emailQueue.getArguments())
                 .containsEntry("x-dead-letter-exchange", "cmd.dead.dlx")
                 .containsEntry("x-dead-letter-routing-key", "email.send.dlq");
+
+        Queue emailDlq = queues.stream().filter(q -> q.getName().equals("q.cmd.email.dlq")).findFirst().orElseThrow();
+        assertThat(emailDlq.getArguments()).containsEntry("x-message-ttl", 86_400_000L);
 
         assertThat(bindings).hasSize(9);
         assertThat(bindings).anyMatch(b -> b.getExchange().equals("cmd.direct")

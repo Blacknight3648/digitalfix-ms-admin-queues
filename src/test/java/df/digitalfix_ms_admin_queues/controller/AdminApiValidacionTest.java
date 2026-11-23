@@ -1,13 +1,15 @@
 package df.digitalfix_ms_admin_queues.controller;
 
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
-import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
+import df.digitalfix_ms_admin_queues.dto.InitializeResponseDTO;
+import df.digitalfix_ms_admin_queues.exception.ProtectedResourceException;
 import df.digitalfix_ms_admin_queues.exception.ResourceAlreadyExistsException;
 import df.digitalfix_ms_admin_queues.security.EntraJwtAuthenticationConverter;
 import df.digitalfix_ms_admin_queues.security.JsonSecurityErrorHandler;
 import df.digitalfix_ms_admin_queues.security.SecurityConfig;
 import df.digitalfix_ms_admin_queues.security.UserRoleClient;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
+import df.digitalfix_ms_admin_queues.service.TopologyInitService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +45,8 @@ class AdminApiValidacionTest {
 
     @MockitoBean
     private RabbitAdminService servicio;
+    @MockitoBean
+    private TopologyInitService topologyInitService;
     @MockitoBean
     private JwtDecoder jwtDecoder;
     @MockitoBean
@@ -146,35 +150,64 @@ class AdminApiValidacionTest {
     }
 
     @Test
-    void inicializarTopologiaDevuelve201CuandoSeCreaY200CuandoYaExiste() throws Exception {
-        when(servicio.initializeTopology()).thenReturn(
-                QueueInitializeResponseDTO.builder()
-                        .created(true)
-                        .message("Topología de colas inicializada exitosamente.")
-                        .exchanges(java.util.List.of("cmd.direct", "cmd.topic", "cmd.dead.dlx"))
-                        .queues(java.util.List.of("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq"))
-                        .bindings(java.util.List.of())
+    void inicializarTopologiaUnificadaDevuelve200EnExito207EnParcialY503SiAmbosFallan() throws Exception {
+        when(topologyInitService.initializeAll()).thenReturn(
+                InitializeResponseDTO.builder()
+                        .status("SUCCESS")
+                        .message("Topología unificada de RabbitMQ y Kafka asegurada exitosamente.")
+                        .rabbitmq(InitializeResponseDTO.RabbitInitResult.builder()
+                                .status("OK").created(true)
+                                .exchanges(java.util.List.of("cmd.direct", "cmd.topic", "cmd.dead.dlx"))
+                                .queues(java.util.List.of("q.cmd.email", "q.cmd.dispatch"))
+                                .bindings(java.util.List.of())
+                                .build())
+                        .kafka(InitializeResponseDTO.KafkaInitResult.builder()
+                                .status("OK").created(true)
+                                .createdTopics(java.util.List.of("workorders.events", "audit.timeline"))
+                                .existingTopics(java.util.List.of())
+                                .topics(java.util.List.of("workorders.events", "audit.timeline"))
+                                .build())
                         .build(),
-                QueueInitializeResponseDTO.builder()
-                        .created(false)
-                        .message("La topología de colas ya se encontraba inicializada.")
-                        .exchanges(java.util.List.of("cmd.direct", "cmd.topic", "cmd.dead.dlx"))
-                        .queues(java.util.List.of("q.cmd.email", "q.cmd.dispatch", "q.cmd.email.dlq", "q.cmd.dispatch.dlq"))
-                        .bindings(java.util.List.of())
+                InitializeResponseDTO.builder()
+                        .status("PARTIAL")
+                        .message("Inicialización parcial: uno de los brokers presentó fallos.")
+                        .rabbitmq(InitializeResponseDTO.RabbitInitResult.builder().status("OK").build())
+                        .kafka(InitializeResponseDTO.KafkaInitResult.builder().status("FAILED").error("Timeout").build())
+                        .build(),
+                InitializeResponseDTO.builder()
+                        .status("FAILED")
+                        .message("No se pudo inicializar ni RabbitMQ ni Apache Kafka.")
+                        .rabbitmq(InitializeResponseDTO.RabbitInitResult.builder().status("FAILED").build())
+                        .kafka(InitializeResponseDTO.KafkaInitResult.builder().status("FAILED").build())
                         .build()
         );
 
         mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.created").value(true))
-                .andExpect(jsonPath("$.exchanges.length()").value(3))
-                .andExpect(jsonPath("$.queues.length()").value(4));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.rabbitmq.exchanges.length()").value(3))
+                .andExpect(jsonPath("$.kafka.topics.length()").value(2));
 
         mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.created").value(false));
+                .andExpect(status().isMultiStatus())
+                .andExpect(jsonPath("$.status").value("PARTIAL"))
+                .andExpect(jsonPath("$.kafka.status").value("FAILED"));
 
-        verify(servicio, times(2)).initializeTopology();
+        mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value("FAILED"));
+
+        verify(topologyInitService, times(3)).initializeAll();
+    }
+
+    @Test
+    void borrarRecursoProtegidoResponde403() throws Exception {
+        doThrow(new ProtectedResourceException("'q.cmd.email' está protegido"))
+                .when(servicio).deleteQueue("q.cmd.email", false, false);
+
+        mockMvc.perform(delete("/api/v1/queues/q.cmd.email").with(adminJwt()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
     }
 
     @Test

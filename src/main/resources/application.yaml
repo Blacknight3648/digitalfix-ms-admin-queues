@@ -20,11 +20,47 @@ spring:
         initial-interval: 1000ms
         max-attempts: 3
 
+  # Configuración de Conexión a Apache Kafka (administración centralizada de tópicos)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      fail-fast: false
+
+kafka:
+  default-replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+  admin:
+    request-timeout-ms: ${KAFKA_ADMIN_REQUEST_TIMEOUT_MS:5000}
+  topics:
+    - name: workorders.events
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "604800000"
+    - name: audit.timeline
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: compact,delete
+        retention.ms: "2592000000"
+    - name: workorders.events.DLT
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "1209600000"
+    - name: workorders.events.DLT-report
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "1209600000"
+
 app:
   admin:
     # Recursos del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular por la API.
     # Nombres exactos o prefijos terminados en '*'.
-    protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
+    protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*,workorders.events*,audit.timeline}
     # URL de la API HTTP de RabbitMQ Management (puerto 15672) para listar colas, exchanges y bindings.
     management-url: ${RABBITMQ_MANAGEMENT_URL:http://${RABBITMQ_HOST:localhost}:${RABBITMQ_MANAGEMENT_PORT:15672}}
   # Topología centralizada de RabbitMQ (declarada únicamente por ms-admin-queues)
@@ -49,6 +85,7 @@ app:
         dead-letter-exchange: cmd.dead.dlx
         dead-letter-routing-key: email.send.dlq
         dlq-name: q.cmd.email.dlq
+        dlq-message-ttl: 86400000
         bindings:
           - exchange: cmd.direct
             routing-key: email.send
@@ -60,6 +97,7 @@ app:
         dead-letter-exchange: cmd.dead.dlx
         dead-letter-routing-key: dispatch.ticket.dlq
         dlq-name: q.cmd.dispatch.dlq
+        dlq-message-ttl: 86400000
         bindings:
           - exchange: cmd.direct
             routing-key: dispatch.ticket
@@ -71,6 +109,7 @@ app:
         dead-letter-exchange: cmd.dead.dlx
         dead-letter-routing-key: report.generate.dlq
         dlq-name: q.cmd.report.dlq
+        dlq-message-ttl: 86400000
         bindings:
           - exchange: cmd.direct
             routing-key: report.generate

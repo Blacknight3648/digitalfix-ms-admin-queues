@@ -31,6 +31,7 @@ public class RabbitTopologyProperties {
         private String deadLetterExchange;
         private String deadLetterRoutingKey;
         private String dlqName;
+        private Long dlqMessageTtl;
         private List<BindingDefinition> bindings = new ArrayList<>();
     }
 

@@ -7,7 +7,6 @@ import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.enums.ExchangeType;
 import df.digitalfix_ms_admin_queues.exception.AdminQueueException;
-import df.digitalfix_ms_admin_queues.exception.ProtectedResourceException;
 import df.digitalfix_ms_admin_queues.exception.ResourceAlreadyExistsException;
 import df.digitalfix_ms_admin_queues.exception.ResourceNotFoundException;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
@@ -293,13 +292,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     }
 
     private void verificarNoProtegido(String nombre) {
-        boolean protegido = protectedResources.stream()
-                .map(String::trim)
-                .filter(p -> !p.isEmpty())
-                .anyMatch(p -> p.endsWith("*") ? nombre.startsWith(p.substring(0, p.length() - 1)) : nombre.equals(p));
-        if (protegido) {
-            throw new ProtectedResourceException("'" + nombre + "' es un recurso del sistema administrado por ms-admin-queues y no se puede eliminar ni desvincular desde la API");
-        }
+        ProtectedResourceGuard.ensureNotProtected(nombre, protectedResources, "AMQP");
     }
 
     /**
