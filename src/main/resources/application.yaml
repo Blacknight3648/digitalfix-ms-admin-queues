@@ -5,6 +5,13 @@ spring:
   application:
     name: ms-admin-queues
 
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../digitalfix-infrastructure/.env[.properties]
+      - optional:file:digitalfix-infrastructure/.env[.properties]
+      - optional:file:../.env[.properties]
+
   # Configuración de Conexión a RabbitMQ
   rabbitmq:
     # Nodos del clúster separados por coma: si se cae uno, el cliente reconecta al otro.
