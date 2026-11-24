@@ -2,11 +2,18 @@ package df.digitalfix_ms_admin_queues.controller;
 
 import df.digitalfix_ms_admin_queues.dto.EventoPublicadoDTO;
 import df.digitalfix_ms_admin_queues.exception.PublicacionFallidaException;
+import df.digitalfix_ms_admin_queues.security.EntraJwtAuthenticationConverter;
+import df.digitalfix_ms_admin_queues.security.JsonSecurityErrorHandler;
+import df.digitalfix_ms_admin_queues.security.SecurityConfig;
+import df.digitalfix_ms_admin_queues.security.UserRoleClient;
 import df.digitalfix_ms_admin_queues.service.PublicadorEventosService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -20,6 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 // Contrato de la API interna de publicación que usan los productores (ms-workorders).
 @WebMvcTest(controllers = EventoPublicacionController.class)
+@Import({SecurityConfig.class, EntraJwtAuthenticationConverter.class, JsonSecurityErrorHandler.class})
+@TestPropertySource(properties = {"AZURE_TENANT_ID=test-tenant", "AZURE_CLIENT_ID=test-client"})
 class EventoPublicacionControllerTest {
 
     @Autowired
@@ -27,6 +36,10 @@ class EventoPublicacionControllerTest {
 
     @MockitoBean
     private PublicadorEventosService publicador;
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+    @MockitoBean
+    private UserRoleClient userRoleClient;
 
     private ResultActions publicar(String flujo, String json) throws Exception {
         return mockMvc.perform(post("/internal/v1/eventos/{flujo}", flujo)
