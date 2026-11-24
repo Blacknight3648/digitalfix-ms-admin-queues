@@ -1,6 +1,6 @@
 package df.digitalfix_ms_admin_queues.service.impl;
 
-import df.digitalfix_ms_admin_queues.config.RabbitTopologyProperties;
+import df.digitalfix_ms_admin_queues.config.TopologiaRabbitProperties;
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
@@ -30,7 +30,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final RabbitAdmin rabbitAdmin;
     private final RabbitManagementClient managementClient;
-    private final RabbitTopologyProperties topologyProperties;
+    private final TopologiaRabbitProperties topologia;
 
     // Colas y exchanges del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
@@ -45,28 +45,21 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     public QueueInitializeResponseDTO initializeTopology() {
         log.info("Iniciando declaración idempotente de topología centralizada en RabbitMQ");
 
-        List<String> exchanges = topologyProperties.getExchanges().stream()
-                .map(RabbitTopologyProperties.ExchangeDefinition::getName)
-                .toList();
+        TopologiaRabbitProperties.Exchanges ex = topologia.exchanges();
+        List<String> exchanges = List.of(ex.direct(), ex.topic(), ex.dlx());
 
         List<String> queues = new java.util.ArrayList<>();
         List<String> bindings = new java.util.ArrayList<>();
 
-        for (RabbitTopologyProperties.QueueDefinition q : topologyProperties.getQueues()) {
-            queues.add(q.getName());
-            for (RabbitTopologyProperties.BindingDefinition b : q.getBindings()) {
-                bindings.add(b.getExchange() + " -> " + q.getName() + " [" + b.getRoutingKey() + "]");
-            }
-            if (q.getDlqName() != null && !q.getDlqName().isBlank()) {
-                queues.add(q.getDlqName());
-                if (q.getDeadLetterExchange() != null && !q.getDeadLetterExchange().isBlank()
-                        && q.getDeadLetterRoutingKey() != null && !q.getDeadLetterRoutingKey().isBlank()) {
-                    bindings.add(q.getDeadLetterExchange() + " -> " + q.getDlqName() + " [" + q.getDeadLetterRoutingKey() + "]");
-                }
-            }
+        for (TopologiaRabbitProperties.Flujo flujo : topologia.flujos().values()) {
+            queues.add(flujo.cola());
+            queues.add(flujo.dlq());
+            bindings.add(ex.direct() + " -> " + flujo.cola() + " [" + flujo.routingKey() + "]");
+            bindings.add(ex.topic() + " -> " + flujo.cola() + " [" + flujo.patronTopic() + "]");
+            bindings.add(ex.dlx() + " -> " + flujo.dlq() + " [" + flujo.routingKeyDlq() + "]");
         }
 
-        boolean faltanRecursos = exchanges.stream().anyMatch(ex -> !existeExchange(ex))
+        boolean faltanRecursos = exchanges.stream().anyMatch(nombreEx -> !existeExchange(nombreEx))
                 || queues.stream().anyMatch(q -> rabbitAdmin.getQueueProperties(q) == null);
 
         try {
