@@ -35,13 +35,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    // Parámetros de ruta o de query inválidos (ej. DELETE /api/v1/queues/nombre%20con%20espacios)
+    // Parámetros de ruta o de query inválidos (ej. DELETE /api/v1/queues/nombre%20con%20espacios). Si el
+    // método valida su ruta, Spring también reporta aquí los errores del @Valid @RequestBody: esos
+    // se informan por campo (errors.subtipo), igual que en handleValidationExceptions.
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<Map<String, Object>> handleParameterValidation(HandlerMethodValidationException ex) {
         Map<String, String> paramErrors = new HashMap<>();
-        ex.getParameterValidationResults().forEach(resultado -> paramErrors.put(
-                resultado.getMethodParameter().getParameterName(),
-                resultado.getResolvableErrors().get(0).getDefaultMessage()));
+        ex.getParameterValidationResults().forEach(resultado -> resultado.getResolvableErrors().forEach(error ->
+                paramErrors.putIfAbsent(
+                        error instanceof FieldError campo ? campo.getField() : resultado.getMethodParameter().getParameterName(),
+                        error.getDefaultMessage())));
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
@@ -105,6 +108,18 @@ public class GlobalExceptionHandler {
         response.put("detail", ex.getMostSpecificCause().getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    // El broker no aceptó el evento: el productor debe saber que no quedó encolado.
+    @ExceptionHandler(PublicacionFallidaException.class)
+    public ResponseEntity<Map<String, Object>> handlePublicacionFallida(PublicacionFallidaException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.put("error", "Evento No Publicado");
+        response.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
     @ExceptionHandler(AdminQueueException.class)

@@ -1,0 +1,61 @@
+# CI/CD de digitalfix-ms-admin-queues: cada push a main se compila y, si compila, se despliega en AWS.
+#
+#   1. Compilar  -> mvnw package (sin tests). Si el código no compila, no se despliega.
+#   2. Desplegar -> pide a digitalfix-infrastructure que actualice "ms-admin-queues" en la EC2
+#                   del backend (git pull + docker compose build/up, vía SSH).
+#
+# Secret necesario en este repo: GH_PAT (token con permiso sobre digitalfix-infrastructure).
+# El avance del despliegue se ve en:
+#   https://github.com/SolgreyDuocUC/digitalfix-infrastructure/actions
+name: CI/CD main
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+# Si llegan dos push seguidos, solo sigue el último.
+concurrency:
+  group: ci-cd-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Compilar y empaquetar (sin tests)
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp package -DskipTests
+
+  deploy:
+    name: Desplegar en AWS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pedir despliegue a digitalfix-infrastructure
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Falta el secret GH_PAT en este repositorio"
+            exit 1
+          fi
+          gh api repos/SolgreyDuocUC/digitalfix-infrastructure/dispatches \
+            -f event_type=deploy-main \
+            -f 'client_payload[service]=ms-admin-queues'
+          echo "Despliegue de ms-admin-queues solicitado. Avance en:" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/SolgreyDuocUC/digitalfix-infrastructure/actions" >> "$GITHUB_STEP_SUMMARY"

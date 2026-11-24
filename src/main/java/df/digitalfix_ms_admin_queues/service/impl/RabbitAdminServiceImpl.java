@@ -29,7 +29,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final RabbitAdmin rabbitAdmin;
 
-    // Colas y exchanges del sistema (los declara ms-notify): no se pueden borrar ni desvincular
+    // Colas y exchanges del sistema (los declara TopologiaRabbitConfig): no se pueden borrar ni desvincular
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
     @Value("${app.admin.protected-resources:}")
     private List<String> protectedResources;
@@ -221,7 +221,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
                 .filter(p -> !p.isEmpty())
                 .anyMatch(p -> p.endsWith("*") ? nombre.startsWith(p.substring(0, p.length() - 1)) : nombre.equals(p));
         if (protegido) {
-            throw new ProtectedResourceException("'" + nombre + "' es un recurso del sistema (lo usa ms-notify) y no se puede eliminar ni desvincular desde la API");
+            throw new ProtectedResourceException("'" + nombre + "' es un recurso de la topología del sistema y no se puede eliminar ni desvincular desde la API");
         }
     }
 

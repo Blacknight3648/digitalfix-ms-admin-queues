@@ -17,9 +17,11 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("DigitalFix — ms-admin-queues")
                         .version("1.0.0")
-                        .description("Administración centralizada de la topología de RabbitMQ: colas, exchanges, "
-                                + "bindings y control de listeners. En producción se consume a través del BFF "
-                                + "(http://localhost:8090), que exige un JWT de Entra ID con rol SUPERADMIN."))
+                        .description("Mensajería centralizada de DigitalFix: topología de RabbitMQ (colas, exchanges, "
+                                + "bindings), publicación de eventos de los productores, entrega HTTP a los "
+                                + "microservicios de destino y control de listeners. La administración se consume a "
+                                + "través del BFF (http://localhost:8090), que exige un JWT de Entra ID con rol "
+                                + "SUPERADMIN; /internal/** solo es accesible dentro de la red digitalfix-net."))
                 .servers(List.of(
                         new Server().url("http://localhost:8090").description("BFF Gateway (requiere Bearer token)"),
                         new Server().url("http://localhost:8084").description("Acceso directo (solo desarrollo local)")));
