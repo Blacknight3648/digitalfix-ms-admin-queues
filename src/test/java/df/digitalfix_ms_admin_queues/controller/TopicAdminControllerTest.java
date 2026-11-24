@@ -54,7 +54,7 @@ class TopicAdminControllerTest {
     private UserRoleClient userRoleClient;
 
     private static RequestPostProcessor adminJwt() {
-        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_SUPERADMIN"));
     }
 
     @Test

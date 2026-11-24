@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@Tag(name = "Listeners", description = "Estado y control (start, stop, pause, resume) de los consumidores de ms-notify")
+@Tag(name = "Listeners", description = "Estado y control (start, stop, pause, resume) de los listeners de entrega en ms-admin-queues")
 @RequestMapping("/api/v1/listeners")
 @RequiredArgsConstructor
 public class ListenerAdminController {
@@ -21,7 +21,7 @@ public class ListenerAdminController {
 
     /**
      * GET /api/v1/listeners
-     * Obtiene el listado y estado de todos los listeners registrados en el broker.
+     * Obtiene el listado y estado de todos los listeners registrados localmente en el proceso.
      */
     @GetMapping
     public ResponseEntity<List<ListenerContainerDTO>> getAllListeners() {

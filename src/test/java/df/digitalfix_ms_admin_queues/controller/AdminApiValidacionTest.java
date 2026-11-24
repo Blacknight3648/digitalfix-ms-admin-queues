@@ -53,7 +53,7 @@ class AdminApiValidacionTest {
     private UserRoleClient userRoleClient;
 
     private static RequestPostProcessor adminJwt() {
-        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_SUPERADMIN"));
     }
 
     private org.springframework.test.web.servlet.ResultActions postJson(String ruta, String json) throws Exception {

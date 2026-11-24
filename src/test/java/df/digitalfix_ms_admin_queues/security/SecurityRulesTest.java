@@ -63,10 +63,14 @@ class SecurityRulesTest {
         mockMvc.perform(get("/api/v1/topics")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_TECNICO"))))
                 .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/queues")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void adminYSuperadminAccedenAInitializeColasYTopicos() throws Exception {
+    void superadminAccedeAInitializeColasYTopicos() throws Exception {
         when(topologyInitService.initializeAll()).thenReturn(
                 InitializeResponseDTO.builder()
                         .status("SUCCESS")
@@ -83,7 +87,7 @@ class SecurityRulesTest {
         );
 
         mockMvc.perform(post("/api/v1/queues/initialize")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SUPERADMIN"))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/v1/queues")
