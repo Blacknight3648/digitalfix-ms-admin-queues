@@ -38,6 +38,7 @@ class TopologyInitServiceImplTest {
         InitializeResponseDTO result = service.initializeAll();
 
         assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.isCreated()).isTrue();
         assertThat(result.getRabbitmq().getStatus()).isEqualTo("OK");
         assertThat(result.getKafka().getStatus()).isEqualTo("OK");
     }

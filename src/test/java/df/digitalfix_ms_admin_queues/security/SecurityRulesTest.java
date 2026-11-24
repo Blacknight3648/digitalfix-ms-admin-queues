@@ -84,7 +84,7 @@ class SecurityRulesTest {
 
         mockMvc.perform(post("/api/v1/queues/initialize")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/v1/queues")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SUPERADMIN"))))

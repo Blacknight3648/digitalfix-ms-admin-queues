@@ -15,6 +15,7 @@ public class InitializeResponseDTO {
 
     /** {@code SUCCESS}, {@code PARTIAL} o {@code FAILED}. */
     private String status;
+    private boolean created;
     private String message;
     private RabbitInitResult rabbitmq;
     private KafkaInitResult kafka;

@@ -43,6 +43,7 @@ public class TopologyInitServiceImpl implements TopologyInitService {
 
         return InitializeResponseDTO.builder()
                 .status(status)
+                .created(rabbitResult.isCreated() || kafkaResult.isCreated())
                 .message(message)
                 .rabbitmq(rabbitResult)
                 .kafka(kafkaResult)

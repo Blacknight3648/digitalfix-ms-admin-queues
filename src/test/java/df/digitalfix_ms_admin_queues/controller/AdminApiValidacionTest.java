@@ -154,6 +154,7 @@ class AdminApiValidacionTest {
         when(topologyInitService.initializeAll()).thenReturn(
                 InitializeResponseDTO.builder()
                         .status("SUCCESS")
+                        .created(true)
                         .message("Topología unificada de RabbitMQ y Kafka asegurada exitosamente.")
                         .rabbitmq(InitializeResponseDTO.RabbitInitResult.builder()
                                 .status("OK").created(true)
@@ -167,6 +168,13 @@ class AdminApiValidacionTest {
                                 .existingTopics(java.util.List.of())
                                 .topics(java.util.List.of("workorders.events", "audit.timeline"))
                                 .build())
+                        .build(),
+                InitializeResponseDTO.builder()
+                        .status("SUCCESS")
+                        .created(false)
+                        .message("Topología unificada de RabbitMQ y Kafka asegurada exitosamente.")
+                        .rabbitmq(InitializeResponseDTO.RabbitInitResult.builder().status("OK").created(false).build())
+                        .kafka(InitializeResponseDTO.KafkaInitResult.builder().status("OK").created(false).build())
                         .build(),
                 InitializeResponseDTO.builder()
                         .status("PARTIAL")
@@ -183,10 +191,16 @@ class AdminApiValidacionTest {
         );
 
         mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.created").value(true))
                 .andExpect(jsonPath("$.rabbitmq.exchanges.length()").value(3))
                 .andExpect(jsonPath("$.kafka.topics.length()").value(2));
+
+        mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.created").value(false));
 
         mockMvc.perform(post("/api/v1/queues/initialize").with(adminJwt()))
                 .andExpect(status().isMultiStatus())
@@ -197,7 +211,7 @@ class AdminApiValidacionTest {
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value("FAILED"));
 
-        verify(topologyInitService, times(3)).initializeAll();
+        verify(topologyInitService, times(4)).initializeAll();
     }
 
     @Test

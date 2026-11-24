@@ -41,12 +41,17 @@ public class QueueAdminController {
     /**
      * POST /api/v1/queues/initialize
      * Declara de forma idempotente la topología base en RabbitMQ y los tópicos core en Apache Kafka.
+     * Responde 201 Created si se creó algún recurso, 200 OK si ya existía todo, 207 Multi-Status si
+     * solo uno de los brokers respondió, o 503 Service Unavailable si fallaron ambos.
      */
     @PostMapping("/initialize")
     public ResponseEntity<InitializeResponseDTO> initializeQueues() {
         InitializeResponseDTO response = topologyInitService.initializeAll();
+        boolean anyCreated = response.isCreated()
+                || (response.getRabbitmq() != null && response.getRabbitmq().isCreated())
+                || (response.getKafka() != null && response.getKafka().isCreated());
         HttpStatus status = switch (response.getStatus()) {
-            case "SUCCESS" -> HttpStatus.OK;
+            case "SUCCESS" -> anyCreated ? HttpStatus.CREATED : HttpStatus.OK;
             case "PARTIAL" -> HttpStatus.MULTI_STATUS;
             default -> HttpStatus.SERVICE_UNAVAILABLE;
         };
