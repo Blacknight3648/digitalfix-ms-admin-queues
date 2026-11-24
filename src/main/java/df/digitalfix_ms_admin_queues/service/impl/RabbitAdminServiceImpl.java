@@ -1,11 +1,12 @@
 package df.digitalfix_ms_admin_queues.service.impl;
 
+import df.digitalfix_ms_admin_queues.config.RabbitTopologyProperties;
 import df.digitalfix_ms_admin_queues.dto.BindingRequestDTO;
 import df.digitalfix_ms_admin_queues.dto.ExchangeRequestDTO;
+import df.digitalfix_ms_admin_queues.dto.QueueInitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.enums.ExchangeType;
 import df.digitalfix_ms_admin_queues.exception.AdminQueueException;
-import df.digitalfix_ms_admin_queues.exception.ProtectedResourceException;
 import df.digitalfix_ms_admin_queues.exception.ResourceAlreadyExistsException;
 import df.digitalfix_ms_admin_queues.exception.ResourceNotFoundException;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
@@ -28,11 +29,86 @@ import java.util.Properties;
 public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final RabbitAdmin rabbitAdmin;
+    private final RabbitManagementClient managementClient;
+    private final RabbitTopologyProperties topologyProperties;
 
-    // Colas y exchanges del sistema (los declara TopologiaRabbitConfig): no se pueden borrar ni desvincular
+    // Colas y exchanges del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular
     // desde la API. Admite nombres exactos o prefijos terminados en '*' (ej. q.cmd.*).
     @Value("${app.admin.protected-resources:}")
     private List<String> protectedResources;
+
+    // ===================================================================
+    // INICIALIZACIÓN IDEMPOTENTE DE TOPOLOGÍA BASE
+    // ===================================================================
+
+    @Override
+    public QueueInitializeResponseDTO initializeTopology() {
+        log.info("Iniciando declaración idempotente de topología centralizada en RabbitMQ");
+
+        List<String> exchanges = topologyProperties.getExchanges().stream()
+                .map(RabbitTopologyProperties.ExchangeDefinition::getName)
+                .toList();
+
+        List<String> queues = new java.util.ArrayList<>();
+        List<String> bindings = new java.util.ArrayList<>();
+
+        for (RabbitTopologyProperties.QueueDefinition q : topologyProperties.getQueues()) {
+            queues.add(q.getName());
+            for (RabbitTopologyProperties.BindingDefinition b : q.getBindings()) {
+                bindings.add(b.getExchange() + " -> " + q.getName() + " [" + b.getRoutingKey() + "]");
+            }
+            if (q.getDlqName() != null && !q.getDlqName().isBlank()) {
+                queues.add(q.getDlqName());
+                if (q.getDeadLetterExchange() != null && !q.getDeadLetterExchange().isBlank()
+                        && q.getDeadLetterRoutingKey() != null && !q.getDeadLetterRoutingKey().isBlank()) {
+                    bindings.add(q.getDeadLetterExchange() + " -> " + q.getDlqName() + " [" + q.getDeadLetterRoutingKey() + "]");
+                }
+            }
+        }
+
+        boolean faltanRecursos = exchanges.stream().anyMatch(ex -> !existeExchange(ex))
+                || queues.stream().anyMatch(q -> rabbitAdmin.getQueueProperties(q) == null);
+
+        try {
+            rabbitAdmin.initialize();
+            String message = faltanRecursos
+                    ? "Topología de colas inicializada exitosamente."
+                    : "La topología de colas ya se encontraba inicializada.";
+            log.info(message);
+            return QueueInitializeResponseDTO.builder()
+                    .created(faltanRecursos)
+                    .message(message)
+                    .exchanges(exchanges)
+                    .queues(queues)
+                    .bindings(bindings)
+                    .build();
+        } catch (Exception e) {
+            log.error("Error al inicializar la topología de colas: {}", e.getMessage());
+            throw traducir(e, "Fallo al inicializar la topología de colas");
+        }
+    }
+
+    // ===================================================================
+    // CONSULTA DE INVENTARIO (RABBITMQ MANAGEMENT API)
+    // ===================================================================
+
+    @Override
+    public List<Map<String, Object>> listQueues() {
+        log.info("Listando todas las colas registradas en RabbitMQ");
+        return managementClient.listQueues();
+    }
+
+    @Override
+    public List<Map<String, Object>> listExchanges() {
+        log.info("Listando todos los exchanges registrados en RabbitMQ");
+        return managementClient.listExchanges();
+    }
+
+    @Override
+    public List<Map<String, Object>> listBindings() {
+        log.info("Listando todos los bindings registrados en RabbitMQ");
+        return managementClient.listBindings();
+    }
 
     // ===================================================================
     // GESTIÓN DE COLAS (QUEUES)
@@ -216,13 +292,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     }
 
     private void verificarNoProtegido(String nombre) {
-        boolean protegido = protectedResources.stream()
-                .map(String::trim)
-                .filter(p -> !p.isEmpty())
-                .anyMatch(p -> p.endsWith("*") ? nombre.startsWith(p.substring(0, p.length() - 1)) : nombre.equals(p));
-        if (protegido) {
-            throw new ProtectedResourceException("'" + nombre + "' es un recurso de la topología del sistema y no se puede eliminar ni desvincular desde la API");
-        }
+        ProtectedResourceGuard.ensureNotProtected(nombre, protectedResources, "AMQP");
     }
 
     /**

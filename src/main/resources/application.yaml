@@ -34,11 +34,49 @@ spring:
         retry:
           enabled: false
 
+  # Configuración de Conexión a Apache Kafka (administración centralizada de tópicos)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      fail-fast: false
+
+kafka:
+  default-replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+  admin:
+    request-timeout-ms: ${KAFKA_ADMIN_REQUEST_TIMEOUT_MS:5000}
+  topics:
+    - name: workorders.events
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "604800000"
+    - name: audit.timeline
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: compact,delete
+        retention.ms: "2592000000"
+    - name: workorders.events.DLT
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "1209600000"
+    - name: workorders.events.DLT-report
+      partitions: 3
+      replicas: ${KAFKA_DEFAULT_REPLICAS:1}
+      configs:
+        cleanup.policy: delete
+        retention.ms: "1209600000"
+
 app:
   admin:
-    # Recursos del sistema (los declara TopologiaRabbitConfig): no se pueden borrar ni desvincular por la API.
+    # Recursos del sistema (administrados centralmente por ms-admin-queues): no se pueden borrar ni desvincular por la API.
     # Nombres exactos o prefijos terminados en '*'.
-    protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*}
+    protected-resources: ${ADMIN_PROTECTED_RESOURCES:q.cmd.*,cmd.*,workorders.events*,audit.timeline}
+    # URL de la API HTTP de RabbitMQ Management (puerto 15672) para listar colas, exchanges y bindings.
+    management-url: ${RABBITMQ_MANAGEMENT_URL:http://${RABBITMQ_HOST:localhost}:${RABBITMQ_MANAGEMENT_PORT:15672}}
 
   # -------------------------------------------------------------------
   # Topología RabbitMQ (caso, sección 8): única fuente de nombres de colas, exchanges y routing keys
@@ -86,6 +124,67 @@ app:
     # Espera máxima de la confirmación del broker al publicar un evento
     publicacion:
       confirm-timeout: 5s
+
+  # Topología centralizada de RabbitMQ (declarada por RabbitTopologyConfig)
+  topology:
+    exchanges:
+      - name: cmd.direct      # Exchange principal para envío directo de comandos (ms-workorders -> colas)
+        type: DIRECT
+        durable: true
+        auto-delete: false
+      - name: cmd.topic       # Exchange por tópicos para enrutamiento flexible de comandos
+        type: TOPIC
+        durable: true
+        auto-delete: false
+      - name: cmd.dead.dlx    # Dead Letter Exchange centralizado para mensajes fallidos (.dlq)
+        type: DIRECT
+        durable: true
+        auto-delete: false
+    queues:
+      # Cola de envío de correos electrónicos (consumida por ms-notify)
+      - name: q.cmd.email
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: email.send.dlq
+        dlq-name: q.cmd.email.dlq
+        dlq-message-ttl: 86400000
+        bindings:
+          - exchange: cmd.direct
+            routing-key: email.send
+          - exchange: cmd.topic
+            routing-key: email.send
+      # Cola de despacho de tickets / órdenes de trabajo (publicada por ms-workorders, consumida por ms-notify)
+      - name: q.cmd.dispatch
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: dispatch.ticket.dlq
+        dlq-name: q.cmd.dispatch.dlq
+        dlq-message-ttl: 86400000
+        bindings:
+          - exchange: cmd.direct
+            routing-key: dispatch.ticket
+          - exchange: cmd.topic
+            routing-key: dispatch.ticket
+      # Cola de generación de reportes (publicada por ms-workorders/reportes, consumida por ms-notify/reportes)
+      - name: q.cmd.report
+        durable: true
+        dead-letter-exchange: cmd.dead.dlx
+        dead-letter-routing-key: report.generate.dlq
+        dlq-name: q.cmd.report.dlq
+        dlq-message-ttl: 86400000
+        bindings:
+          - exchange: cmd.direct
+            routing-key: report.generate
+          - exchange: cmd.topic
+            routing-key: report.generate
+  listeners:
+    # Los @RabbitListener viven en ms-notify: el control de listeners se delega a su API interna.
+    notify-url: ${MS_NOTIFY_URL:http://localhost:8083}
+
+digitalfix:
+  # ms-user: fuente del rol de negocio (USUARIOS/ROLES) para la autorización por rol.
+  ms-user:
+    url: ${MS_USER_URL:http://localhost:8082}
 
 # Documentación OpenAPI / Swagger UI: http://localhost:8084/swagger-ui.html
 springdoc:

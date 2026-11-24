@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
@@ -23,6 +24,15 @@ import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 public class ExchangeAdminController {
 
     private final RabbitAdminService rabbitAdminService;
+
+    /**
+     * GET /api/v1/exchanges
+     * Lista todos los exchanges registrados en el broker RabbitMQ.
+     */
+    @GetMapping
+    public ResponseEntity<List<Map<String, Object>>> listExchanges() {
+        return ResponseEntity.ok(rabbitAdminService.listExchanges());
+    }
 
     /**
      * POST /api/v1/exchanges

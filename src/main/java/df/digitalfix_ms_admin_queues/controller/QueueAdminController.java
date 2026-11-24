@@ -1,7 +1,9 @@
 package df.digitalfix_ms_admin_queues.controller;
 
+import df.digitalfix_ms_admin_queues.dto.InitializeResponseDTO;
 import df.digitalfix_ms_admin_queues.dto.QueueRequestDTO;
 import df.digitalfix_ms_admin_queues.service.RabbitAdminService;
+import df.digitalfix_ms_admin_queues.service.TopologyInitService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -24,6 +27,31 @@ import static df.digitalfix_ms_admin_queues.dto.ReglasNombresAmqp.*;
 public class QueueAdminController {
 
     private final RabbitAdminService rabbitAdminService;
+    private final TopologyInitService topologyInitService;
+
+    /**
+     * GET /api/v1/queues
+     * Lista todas las colas registradas en el broker RabbitMQ.
+     */
+    @GetMapping
+    public ResponseEntity<List<Map<String, Object>>> listQueues() {
+        return ResponseEntity.ok(rabbitAdminService.listQueues());
+    }
+
+    /**
+     * POST /api/v1/queues/initialize
+     * Declara de forma idempotente la topología base en RabbitMQ y los tópicos core en Apache Kafka.
+     */
+    @PostMapping("/initialize")
+    public ResponseEntity<InitializeResponseDTO> initializeQueues() {
+        InitializeResponseDTO response = topologyInitService.initializeAll();
+        HttpStatus status = switch (response.getStatus()) {
+            case "SUCCESS" -> HttpStatus.OK;
+            case "PARTIAL" -> HttpStatus.MULTI_STATUS;
+            default -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+        return ResponseEntity.status(status).body(response);
+    }
 
     /**
      * POST /api/v1/queues
