@@ -31,5 +31,5 @@ EXPOSE 8084
 # Variable de entorno por defecto
 ENV PORT=8084
 
-# Comando de inicio
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Comando de inicio (preferIPv4Stack evita SocketException: Network unreachable en Docker sin IPv6)
+ENTRYPOINT ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]

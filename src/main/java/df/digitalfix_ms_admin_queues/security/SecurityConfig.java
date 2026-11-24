@@ -72,7 +72,9 @@ public class SecurityConfig {
         String issuerV2 = "https://login.microsoftonline.com/" + tenantId + "/v2.0";
         String issuerV1 = "https://sts.windows.net/" + tenantId + "/";
 
-        NimbusJwtDecoder jwtDecoder = JwtDecoders.fromIssuerLocation(issuerV2);
+        // Descubre el JWKS desde el openid-configuration del tenant al validar el primer token
+        // (no al arrancar), evitando fallos de arranque si Entra ID o la red externa no responden.
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withIssuerLocation(issuerV2).build();
 
         Set<String> allowedIssuers = Set.of(issuerV2, issuerV1);
         OAuth2TokenValidator<Jwt> issuerValidator = new JwtClaimValidator<Object>(
