@@ -64,13 +64,18 @@ public class UserRoleClient {
             if (profile == null) {
                 return Optional.empty();
             }
-            Object role = profile.get("rolCodigo");
-            if (role instanceof String code && !code.isBlank()) {
-                return Optional.of(code);
+            // ms-user expone el rol como "codigoRol" (UserResponseDto); se acepta "rolCodigo" por compatibilidad.
+            Object role = profile.get("codigoRol");
+            if (role == null) {
+                role = profile.get("rolCodigo");
             }
+            if (role instanceof String code && !code.isBlank()) {
+                return Optional.of(code.trim().toUpperCase());
+            }
+            log.warn("ms-user (/api/user/me) no devolvió 'codigoRol' para {}", userEntraId);
             return Optional.empty();
         } catch (RestClientException ex) {
-            log.debug("No se pudo obtener el rol desde ms-user para {}: {}", userEntraId, ex.getMessage());
+            log.warn("No se pudo obtener el rol desde ms-user para {}: {}", userEntraId, ex.getMessage());
             return Optional.empty();
         }
     }
